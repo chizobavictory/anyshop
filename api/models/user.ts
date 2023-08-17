@@ -19,6 +19,6 @@ const UserSchema: Schema<IUser> = new Schema({
   img: { type: String },
 }, { timestamps: true });
 
-const UserModel = mongoose.model<IUser>("User", UserSchema);
 
-export default UserModel;
+export default  mongoose.model<IUser>("User", UserSchema);
+

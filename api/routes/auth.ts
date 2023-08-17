@@ -1,9 +1,11 @@
 import { Router } from "express";
-import UserModel from "../models/user";
+import User from "../models/user";
 import CryptoJS from "crypto-js";
+import jwt from "jsonwebtoken";
 
 const router = Router();
 const secretKey = process.env.SECRET_KEY || "";
+const jwtkey = process.env.JWT_KEY || "";
 
 // Register
 router.post("/register", async (req, res) => {
@@ -16,15 +18,15 @@ router.post("/register", async (req, res) => {
 
   try {
     // Check if the email already exists in the database
-    const existingUser = await UserModel.findOne({ email: req.body.email });
-    if (existingUser) {
+    const userEmail = await User.findOne({ email: req.body.email });
+    if (userEmail) {
       return res.status(409).json({ message: "Email already exists" });
     }
 
     // Encrypt the password before saving
     const encryptedPassword = CryptoJS.AES.encrypt(req.body.password, secretKey).toString();
 
-    const newUser = new UserModel({
+    const newUser = new User({
       username: req.body.username,
       email: req.body.email,
       password: encryptedPassword,
@@ -39,6 +41,8 @@ router.post("/register", async (req, res) => {
 });
 
 // Login
+
+// Login
 router.post("/login", async (req, res) => {
   if (!req.body.username || !req.body.password) {
     res.status(400).json({
@@ -48,22 +52,34 @@ router.post("/login", async (req, res) => {
   }
 
   try {
-    const existingUser = await UserModel.findOne({ username: req.body.username });
-    if (!existingUser) {
+    const user = await User.findOne({ username: req.body.username });
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Decrypt the stored password and compare with the provided password
-    const decryptedStoredPassword = CryptoJS.AES.decrypt(existingUser.password, secretKey).toString(CryptoJS.enc.Utf8);
+    const decryptedStoredPassword = CryptoJS.AES.decrypt(user.password, secretKey).toString(CryptoJS.enc.Utf8);
     if (decryptedStoredPassword !== req.body.password) {
       return res.status(401).json({ message: "Invalid password" });
     }
 
-    // If everything checks out, send a success response
-    res.status(200).json({ message: "Login successful", user: existingUser });
-  } catch (err) {
-    res.status(500).json(err);
+    // Generate JWT token
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+        isAdmin: user.isAdmin,
+      },
+      jwtkey,
+      { expiresIn: "3d" }
+    );
+
+    // Remove password from the user object and send response
+    const { password, ...others } = user.toObject();
+    res.status(200).json({ ...others, accessToken });
+
+  } catch (error) {
+    res.status(500).json(error);
   }
 });
 
-export default router;
+export default router

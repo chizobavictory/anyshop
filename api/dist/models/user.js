@@ -34,5 +34,4 @@ const UserSchema = new mongoose_1.Schema({
     },
     img: { type: String },
 }, { timestamps: true });
-const UserModel = mongoose_1.default.model("User", UserSchema);
-exports.default = UserModel;
+exports.default = mongoose_1.default.model("User", UserSchema);
