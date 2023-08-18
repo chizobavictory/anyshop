@@ -2,16 +2,24 @@ import { Request, Response } from "express";
 import User, { IUser } from "../models/user";
 import CryptoJS from "crypto-js";
 import jwt from "jsonwebtoken";
-
+import { sendEmail, welcomeEmail } from "../notifications";
 
 // Register
 export const register = async (req: Request, res: Response) => {
   if (!req.body.username || !req.body.email || !req.body.password) {
-    res.status(400).json({
+    return res.status(400).json({
       message: "Please input your username, email, and password",
     });
-    return;
   }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Regular expression for email validation
+
+  if (!emailRegex.test(req.body.email)) {
+    return res.status(400).json({
+      message: "Invalid email address format",
+    });
+  }
+
   try {
     const userEmail = await User.findOne({ email: req.body.email });
     if (userEmail) {
@@ -27,8 +35,15 @@ export const register = async (req: Request, res: Response) => {
     });
 
     const savedUser = await newUser.save();
+
+    // Send welcome email with verification link
+    const verificationToken = jwt.sign({ userId: savedUser._id }, process.env.JWT_KEY || "", { expiresIn: "1h" });
+    const welcomeEmailHtml = welcomeEmail(savedUser.username, verificationToken);
+    await sendEmail(savedUser.email, "Welcome to AnyShop - Email Verification", welcomeEmailHtml);
+
     res.status(200).json(savedUser); // Send the saved user as a response
   } catch (err) {
+    console.log(err);
     res.status(500).json(err);
   }
 };
@@ -42,7 +57,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json("User does not exist");
     }
 
-    const hashedPassword = CryptoJS.AES.decrypt(user.password, process.env.PASS_SEC || "");
+    const hashedPassword = CryptoJS.AES.decrypt(user.password, process.env.SECRET_KEY || "");
     const originalPassword = hashedPassword.toString(CryptoJS.enc.Utf8);
 
     if (originalPassword !== req.body.password) {
@@ -57,7 +72,7 @@ export const login = async (req: Request, res: Response) => {
       process.env.JWT_KEY || "",
       { expiresIn: "3d" }
     );
-    
+
     const { password, ...others } = user.toObject();
 
     res.status(200).json({ ...others, accessToken });
